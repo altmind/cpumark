@@ -1,9 +1,8 @@
+# coding:utf-8
 from flask import request, url_for
 from flask_api import FlaskAPI, status, exceptions
-from flask_sqlalchemy import SQLAlchemy
 from pass_mark_parser import PassMarkParser
 import os
-import sys
 from models import *
 
 if __name__ == '__main__':
@@ -13,6 +12,7 @@ if __name__ == '__main__':
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///%s/passmark.db' % script_cwd
     db.init_app(app)
     with app.test_request_context():
+        db.engine.text_factory = str
         db.create_all()
 
 
@@ -23,7 +23,17 @@ if __name__ == '__main__':
 
     @app.route('/api/v1/cpu/update', methods=['POST'])
     def update():
-        parser = PassMarkParser()
-        return parser.fetch_and_parse()
+        rows = PassMarkParser().fetch_and_parse()
+        for row in rows:
+            entry = PerfRecord(**row)
+            print repr(entry)
+            existing_entry = PerfRecord.query.get(row['id'])
+            if (existing_entry is not None):
+                db.session.query(PerfRecord).filter(PerfRecord.id == row['id']).update(entry.__dict__)
+            else:
+                db.session.add(entry)
+        db.session.commit()
+        return rows
+
 
     app.run()
